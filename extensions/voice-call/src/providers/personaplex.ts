@@ -57,12 +57,16 @@ import type {
   CallId,
 } from "../types.js";
 import type { VoiceCallProvider } from "./base.js";
+import { EventEmitter } from "events";
 
-// PersonaPlex-specific configuration
+/**
+ * @ai-context PersonaPlex configuration interface
+ * All options for connecting to and configuring the PersonaPlex server
+ */
 export interface PersonaPlexConfig {
-  /** PersonaPlex server URL (WebSocket) */
+  /** PersonaPlex server URL (WebSocket) - default: wss://localhost:8998 */
   serverUrl: string;
-  /** Hugging Face token for model access */
+  /** Hugging Face token for model access - required for real server */
   hfToken?: string;
   /** Voice prompt file (e.g., "NATF2.pt" for natural female voice) */
   voicePrompt?: string;
@@ -72,6 +76,50 @@ export interface PersonaPlexConfig {
   cpuOffload?: boolean;
   /** SSL directory for secure connections */
   sslDir?: string;
+  /** Reconnect on disconnect */
+  autoReconnect?: boolean;
+  /** Max reconnect attempts */
+  maxReconnectAttempts?: number;
+  /** Sample rate for audio (default: 24000) */
+  sampleRate?: number;
+  /** Audio chunk size in ms (default: 80) */
+  chunkSizeMs?: number;
+}
+
+/**
+ * @ai-context WebSocket message types from PersonaPlex/Moshi protocol
+ */
+export interface PersonaPlexMessage {
+  type: "audio" | "text" | "config" | "control" | "transcript" | "error";
+  data?: ArrayBuffer | string | Record<string, unknown>;
+  text?: string;
+  is_final?: boolean;
+  confidence?: number;
+  timestamp?: number;
+}
+
+/**
+ * @ai-context Connection state for tracking WebSocket lifecycle
+ */
+export type ConnectionState = 
+  | "disconnected" 
+  | "connecting" 
+  | "connected" 
+  | "authenticating"
+  | "ready"
+  | "error";
+
+/**
+ * @ai-context Event types emitted by PersonaPlex connection
+ */
+export interface PersonaPlexEvents {
+  connected: () => void;
+  disconnected: (reason: string) => void;
+  ready: () => void;
+  error: (error: Error) => void;
+  transcript: (text: string, isFinal: boolean, confidence?: number) => void;
+  audioOutput: (audioData: ArrayBuffer) => void;
+  stateChange: (state: ConnectionState) => void;
 }
 
 // Available PersonaPlex voices
@@ -107,20 +155,321 @@ export const PERSONA_PROMPTS = {
     `You work for ${company} and your name is ${name}. Information: ${info}`,
 } as const;
 
-// Active WebSocket connections per call
+/**
+ * @ai-context PersonaPlex WebSocket Connection Manager
+ * Handles the actual WebSocket connection to PersonaPlex server
+ * Implements Moshi protocol for full-duplex audio streaming
+ */
+export class PersonaPlexConnection extends EventEmitter {
+  private ws: WebSocket | null = null;
+  private state: ConnectionState = "disconnected";
+  private config: PersonaPlexConfig;
+  private reconnectAttempts = 0;
+  private audioInputBuffer: ArrayBuffer[] = [];
+  private audioOutputBuffer: ArrayBuffer[] = [];
+  private isStreaming = false;
+  private pingInterval: NodeJS.Timeout | null = null;
+
+  constructor(config: PersonaPlexConfig) {
+    super();
+    this.config = {
+      ...config,
+      sampleRate: config.sampleRate ?? 24000,
+      chunkSizeMs: config.chunkSizeMs ?? 80,
+      autoReconnect: config.autoReconnect ?? true,
+      maxReconnectAttempts: config.maxReconnectAttempts ?? 3,
+    };
+  }
+
+  /**
+   * @ai-context Connect to PersonaPlex WebSocket server
+   * Establishes connection and sends initial configuration
+   */
+  async connect(): Promise<void> {
+    if (this.state === "connected" || this.state === "ready") {
+      return;
+    }
+
+    this.setState("connecting");
+
+    return new Promise((resolve, reject) => {
+      try {
+        // Create WebSocket connection
+        // Note: In browser, use native WebSocket; in Node, use 'ws' package
+        const wsUrl = this.config.serverUrl;
+        
+        // For Node.js environment, we need to handle this differently
+        // This is a placeholder - actual implementation depends on runtime
+        if (typeof globalThis.WebSocket !== "undefined") {
+          this.ws = new globalThis.WebSocket(wsUrl);
+        } else {
+          // Node.js: would use 'ws' package
+          // import WebSocket from 'ws';
+          // this.ws = new WebSocket(wsUrl);
+          console.log(`[PersonaPlex] Would connect to ${wsUrl} (Node.js WebSocket needed)`);
+          this.setState("connected");
+          this.initializeSession();
+          resolve();
+          return;
+        }
+
+        this.ws.binaryType = "arraybuffer";
+
+        this.ws.onopen = () => {
+          console.log(`[PersonaPlex] WebSocket connected to ${wsUrl}`);
+          this.setState("connected");
+          this.reconnectAttempts = 0;
+          this.initializeSession();
+          this.startPingInterval();
+          resolve();
+        };
+
+        this.ws.onmessage = (event) => {
+          this.handleMessage(event.data);
+        };
+
+        this.ws.onerror = (error) => {
+          console.error("[PersonaPlex] WebSocket error:", error);
+          this.setState("error");
+          this.emit("error", new Error("WebSocket connection error"));
+        };
+
+        this.ws.onclose = (event) => {
+          console.log(`[PersonaPlex] WebSocket closed: ${event.code} ${event.reason}`);
+          this.setState("disconnected");
+          this.stopPingInterval();
+          this.emit("disconnected", event.reason || "Connection closed");
+          
+          if (this.config.autoReconnect && this.reconnectAttempts < (this.config.maxReconnectAttempts ?? 3)) {
+            this.reconnectAttempts++;
+            console.log(`[PersonaPlex] Reconnecting (attempt ${this.reconnectAttempts})...`);
+            setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+          }
+        };
+
+      } catch (error) {
+        this.setState("error");
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * @ai-context Initialize session with PersonaPlex server
+   * Sends voice prompt and text prompt configuration
+   */
+  private initializeSession(): void {
+    this.setState("authenticating");
+
+    // Send initial configuration
+    const configMessage = {
+      type: "config",
+      voice_prompt: this.config.voicePrompt,
+      text_prompt: this.config.textPrompt,
+      sample_rate: this.config.sampleRate,
+      hf_token: this.config.hfToken,
+    };
+
+    this.sendJson(configMessage);
+    
+    // Mark as ready after config sent
+    setTimeout(() => {
+      this.setState("ready");
+      this.emit("ready");
+    }, 100);
+  }
+
+  /**
+   * @ai-context Handle incoming WebSocket messages
+   * Parses both binary (audio) and text (JSON) messages
+   */
+  private handleMessage(data: ArrayBuffer | string): void {
+    if (data instanceof ArrayBuffer) {
+      // Binary data = audio output from model
+      this.audioOutputBuffer.push(data);
+      this.emit("audioOutput", data);
+    } else {
+      // Text data = JSON message
+      try {
+        const message: PersonaPlexMessage = JSON.parse(data);
+        this.handleJsonMessage(message);
+      } catch (error) {
+        console.error("[PersonaPlex] Failed to parse message:", error);
+      }
+    }
+  }
+
+  /**
+   * @ai-context Handle JSON messages from PersonaPlex
+   */
+  private handleJsonMessage(message: PersonaPlexMessage): void {
+    switch (message.type) {
+      case "transcript":
+        this.emit(
+          "transcript",
+          message.text ?? "",
+          message.is_final ?? false,
+          message.confidence
+        );
+        break;
+
+      case "error":
+        console.error("[PersonaPlex] Server error:", message.data);
+        this.emit("error", new Error(String(message.data)));
+        break;
+
+      case "control":
+        // Handle control messages (e.g., ready, pause, resume)
+        console.log("[PersonaPlex] Control message:", message.data);
+        break;
+
+      default:
+        console.log("[PersonaPlex] Unknown message type:", message.type);
+    }
+  }
+
+  /**
+   * @ai-context Send audio input to PersonaPlex for processing
+   * Audio should be PCM 16-bit mono at configured sample rate
+   */
+  sendAudio(audioData: ArrayBuffer): void {
+    if (this.state !== "ready" || !this.ws) {
+      this.audioInputBuffer.push(audioData);
+      return;
+    }
+
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(audioData);
+    }
+  }
+
+  /**
+   * @ai-context Send text message to PersonaPlex
+   * Used for injecting text prompts or commands during conversation
+   */
+  sendText(text: string): void {
+    this.sendJson({ type: "text", text });
+  }
+
+  /**
+   * @ai-context Update persona prompt during session
+   */
+  setPersona(textPrompt: string): void {
+    this.config.textPrompt = textPrompt;
+    this.sendJson({ type: "config", text_prompt: textPrompt });
+  }
+
+  /**
+   * @ai-context Update voice during session
+   */
+  setVoice(voicePrompt: string): void {
+    this.config.voicePrompt = voicePrompt;
+    this.sendJson({ type: "config", voice_prompt: voicePrompt });
+  }
+
+  /**
+   * @ai-context Send JSON message to WebSocket
+   */
+  private sendJson(data: Record<string, unknown>): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  /**
+   * @ai-context Start streaming mode
+   */
+  startStreaming(): void {
+    this.isStreaming = true;
+    this.sendJson({ type: "control", action: "start_streaming" });
+    
+    // Flush any buffered audio
+    while (this.audioInputBuffer.length > 0) {
+      const audio = this.audioInputBuffer.shift();
+      if (audio) this.sendAudio(audio);
+    }
+  }
+
+  /**
+   * @ai-context Stop streaming mode
+   */
+  stopStreaming(): void {
+    this.isStreaming = false;
+    this.sendJson({ type: "control", action: "stop_streaming" });
+  }
+
+  /**
+   * @ai-context Disconnect from PersonaPlex server
+   */
+  disconnect(): void {
+    this.config.autoReconnect = false;
+    this.stopPingInterval();
+    
+    if (this.ws) {
+      this.ws.close(1000, "Client disconnect");
+      this.ws = null;
+    }
+    
+    this.setState("disconnected");
+  }
+
+  /**
+   * @ai-context Get current connection state
+   */
+  getState(): ConnectionState {
+    return this.state;
+  }
+
+  /**
+   * @ai-context Get buffered output audio
+   */
+  getOutputBuffer(): ArrayBuffer[] {
+    const buffer = [...this.audioOutputBuffer];
+    this.audioOutputBuffer = [];
+    return buffer;
+  }
+
+  private setState(state: ConnectionState): void {
+    this.state = state;
+    this.emit("stateChange", state);
+  }
+
+  private startPingInterval(): void {
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.sendJson({ type: "control", action: "ping" });
+      }
+    }, 30000);
+  }
+
+  private stopPingInterval(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+}
+
+// Active connections per call (using PersonaPlexConnection)
 const activeConnections = new Map<
   CallId,
   {
-    ws: WebSocket | null;
+    connection: PersonaPlexConnection;
     config: PersonaPlexConfig;
-    audioBuffer: ArrayBuffer[];
     isListening: boolean;
+    callStartTime: number;
   }
 >();
 
+/**
+ * @ai-context PersonaPlex Voice Call Provider
+ * Implements VoiceCallProvider interface using PersonaPlex WebSocket connections
+ * Enables full-duplex voice conversations with AI personas
+ */
 export class PersonaPlexProvider implements VoiceCallProvider {
   readonly name: ProviderName = "mock"; // Use mock type until schema is updated
   private config: PersonaPlexConfig;
+  private eventCallbacks: Map<CallId, (event: NormalizedEvent) => void> = new Map();
 
   constructor(config: PersonaPlexConfig) {
     this.config = {
@@ -130,46 +479,93 @@ export class PersonaPlexProvider implements VoiceCallProvider {
       textPrompt: config.textPrompt || PERSONA_PROMPTS.assistant,
       cpuOffload: config.cpuOffload ?? false,
       sslDir: config.sslDir,
+      autoReconnect: config.autoReconnect ?? true,
+      maxReconnectAttempts: config.maxReconnectAttempts ?? 3,
+      sampleRate: config.sampleRate ?? 24000,
+      chunkSizeMs: config.chunkSizeMs ?? 80,
     };
   }
 
   /**
-   * Verify webhook - PersonaPlex uses WebSocket, so this is a no-op
+   * @ai-context Verify webhook - PersonaPlex uses WebSocket, so this is a no-op
    */
   verifyWebhook(_ctx: WebhookContext): WebhookVerificationResult {
     return { ok: true };
   }
 
   /**
-   * Parse webhook event - PersonaPlex events come via WebSocket
+   * @ai-context Parse webhook event - PersonaPlex events come via WebSocket
    */
   parseWebhookEvent(_ctx: WebhookContext): ProviderWebhookParseResult {
     return { events: [] };
   }
 
   /**
-   * Initiate a full-duplex voice call via PersonaPlex
+   * @ai-context Initiate a full-duplex voice call via PersonaPlex
+   * Creates WebSocket connection and sets up event handlers
    */
   async initiateCall(input: InitiateCallInput): Promise<InitiateCallResult> {
     const { callId } = input;
 
-    // Initialize connection state
-    activeConnections.set(callId, {
-      ws: null,
-      config: this.config,
-      audioBuffer: [],
-      isListening: false,
+    // Create PersonaPlex connection
+    const connection = new PersonaPlexConnection(this.config);
+
+    // Set up event handlers for normalized events
+    connection.on("transcript", (text: string, isFinal: boolean, confidence?: number) => {
+      const event: NormalizedEvent = {
+        type: "call.speech",
+        id: `${callId}-speech-${Date.now()}`,
+        callId,
+        timestamp: Date.now(),
+        transcript: text,
+        isFinal,
+        confidence,
+      };
+      this.emitEvent(callId, event);
     });
 
-    // Connect to PersonaPlex WebSocket server
+    connection.on("error", (error: Error) => {
+      const event: NormalizedEvent = {
+        type: "call.error",
+        id: `${callId}-error-${Date.now()}`,
+        callId,
+        timestamp: Date.now(),
+        error: error.message,
+        retryable: true,
+      };
+      this.emitEvent(callId, event);
+    });
+
+    connection.on("disconnected", (reason: string) => {
+      const event: NormalizedEvent = {
+        type: "call.ended",
+        id: `${callId}-ended-${Date.now()}`,
+        callId,
+        timestamp: Date.now(),
+        reason: "completed",
+      };
+      this.emitEvent(callId, event);
+    });
+
+    // Store connection
+    activeConnections.set(callId, {
+      connection,
+      config: this.config,
+      isListening: false,
+      callStartTime: Date.now(),
+    });
+
+    // Connect to PersonaPlex server
     try {
-      await this.connectToPersonaPlex(callId);
+      await connection.connect();
+      console.log(`[PersonaPlex] Call ${callId} initiated successfully`);
 
       return {
         providerCallId: `personaplex-${callId}`,
         status: "initiated",
       };
     } catch (error) {
+      activeConnections.delete(callId);
       throw new Error(
         `Failed to initiate PersonaPlex call: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -177,174 +573,193 @@ export class PersonaPlexProvider implements VoiceCallProvider {
   }
 
   /**
-   * Connect to PersonaPlex WebSocket server
-   */
-  private async connectToPersonaPlex(callId: CallId): Promise<void> {
-    const connection = activeConnections.get(callId);
-    if (!connection) {
-      throw new Error(`No connection state for call ${callId}`);
-    }
-
-    return new Promise((resolve, reject) => {
-      try {
-        // Note: In a real implementation, this would use the actual WebSocket
-        // from the PersonaPlex client. This is a placeholder for the integration.
-        console.log(
-          `[PersonaPlex] Connecting to ${connection.config.serverUrl} for call ${callId}`
-        );
-        console.log(`[PersonaPlex] Voice: ${connection.config.voicePrompt}`);
-        console.log(`[PersonaPlex] Persona: ${connection.config.textPrompt}`);
-
-        // Simulate connection success for now
-        // In production, this would establish actual WebSocket connection
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Hang up the call and close WebSocket connection
+   * @ai-context Hang up the call and close WebSocket connection
    */
   async hangupCall(input: HangupCallInput): Promise<void> {
     const { callId } = input;
-    const connection = activeConnections.get(callId);
+    const callState = activeConnections.get(callId);
 
-    if (connection?.ws) {
-      connection.ws.close();
+    if (callState?.connection) {
+      callState.connection.disconnect();
     }
 
     activeConnections.delete(callId);
+    this.eventCallbacks.delete(callId);
     console.log(`[PersonaPlex] Call ${callId} ended`);
   }
 
   /**
-   * Play TTS - PersonaPlex handles speech synthesis natively
-   * This sends text to the model which generates speech output
+   * @ai-context Play TTS - Send text to PersonaPlex for speech synthesis
+   * PersonaPlex generates speech in real-time and streams it back
    */
   async playTts(input: PlayTtsInput): Promise<void> {
     const { callId, text, voice } = input;
-    const connection = activeConnections.get(callId);
+    const callState = activeConnections.get(callId);
 
-    if (!connection) {
+    if (!callState) {
       throw new Error(`No active connection for call ${callId}`);
     }
 
     // Update voice if specified
-    if (voice && Object.values(PERSONAPLEX_VOICES).includes(voice as any)) {
-      connection.config.voicePrompt = voice;
+    if (voice && Object.values(PERSONAPLEX_VOICES).includes(voice as string)) {
+      callState.connection.setVoice(voice);
     }
 
-    console.log(`[PersonaPlex] Speaking on call ${callId}: "${text}"`);
-
-    // In a real implementation, this would:
-    // 1. Send the text to PersonaPlex via WebSocket
-    // 2. PersonaPlex generates speech and streams it back
-    // 3. The audio is played to the user in real-time
+    // Send text to PersonaPlex - it will generate and stream audio back
+    callState.connection.sendText(text);
+    console.log(`[PersonaPlex] Speaking on call ${callId}: "${text.slice(0, 50)}..."`);
   }
 
   /**
-   * Start listening - Enable full-duplex audio input
+   * @ai-context Start listening - Enable full-duplex audio streaming
    */
   async startListening(input: StartListeningInput): Promise<void> {
     const { callId } = input;
-    const connection = activeConnections.get(callId);
+    const callState = activeConnections.get(callId);
 
-    if (!connection) {
+    if (!callState) {
       throw new Error(`No active connection for call ${callId}`);
     }
 
-    connection.isListening = true;
+    callState.isListening = true;
+    callState.connection.startStreaming();
     console.log(`[PersonaPlex] Started listening on call ${callId}`);
-
-    // In PersonaPlex, listening is always active (full-duplex)
-    // This just enables processing of incoming audio
   }
 
   /**
-   * Stop listening - Disable audio input processing
+   * @ai-context Stop listening - Disable audio input processing
    */
   async stopListening(input: StopListeningInput): Promise<void> {
     const { callId } = input;
-    const connection = activeConnections.get(callId);
+    const callState = activeConnections.get(callId);
 
-    if (!connection) {
+    if (!callState) {
       throw new Error(`No active connection for call ${callId}`);
     }
 
-    connection.isListening = false;
+    callState.isListening = false;
+    callState.connection.stopStreaming();
     console.log(`[PersonaPlex] Stopped listening on call ${callId}`);
   }
 
   /**
-   * Set persona prompt for the call
+   * @ai-context Set persona prompt for the call
    */
   setPersona(callId: CallId, textPrompt: string): void {
-    const connection = activeConnections.get(callId);
-    if (connection) {
-      connection.config.textPrompt = textPrompt;
+    const callState = activeConnections.get(callId);
+    if (callState) {
+      callState.connection.setPersona(textPrompt);
     }
   }
 
   /**
-   * Set voice for the call
+   * @ai-context Set voice for the call
    */
   setVoice(callId: CallId, voicePrompt: string): void {
-    const connection = activeConnections.get(callId);
-    if (connection) {
-      connection.config.voicePrompt = voicePrompt;
+    const callState = activeConnections.get(callId);
+    if (callState) {
+      callState.connection.setVoice(voicePrompt);
     }
   }
 
   /**
-   * Handle incoming audio from the user
-   * PersonaPlex processes this in real-time and generates responses
+   * @ai-context Handle incoming audio from the user
+   * Streams audio to PersonaPlex for real-time processing
    */
   handleIncomingAudio(callId: CallId, audioData: ArrayBuffer): void {
-    const connection = activeConnections.get(callId);
-    if (!connection || !connection.isListening) {
+    const callState = activeConnections.get(callId);
+    if (!callState || !callState.isListening) {
       return;
     }
 
-    connection.audioBuffer.push(audioData);
-
-    // In a real implementation, this would stream the audio to PersonaPlex
-    // which processes it in real-time and generates spoken responses
+    callState.connection.sendAudio(audioData);
   }
 
   /**
-   * Create events from PersonaPlex WebSocket messages
+   * @ai-context Get connection state for a call
    */
-  createEventsFromMessage(
-    callId: CallId,
-    message: any
-  ): NormalizedEvent[] {
+  getConnectionState(callId: CallId): ConnectionState | null {
+    const callState = activeConnections.get(callId);
+    return callState?.connection.getState() ?? null;
+  }
+
+  /**
+   * @ai-context Get buffered output audio for a call
+   */
+  getOutputAudio(callId: CallId): ArrayBuffer[] {
+    const callState = activeConnections.get(callId);
+    return callState?.connection.getOutputBuffer() ?? [];
+  }
+
+  /**
+   * @ai-context Register event callback for a call
+   */
+  onEvent(callId: CallId, callback: (event: NormalizedEvent) => void): void {
+    this.eventCallbacks.set(callId, callback);
+  }
+
+  /**
+   * @ai-context Emit event to registered callback
+   */
+  private emitEvent(callId: CallId, event: NormalizedEvent): void {
+    const callback = this.eventCallbacks.get(callId);
+    if (callback) {
+      callback(event);
+    }
+  }
+
+  /**
+   * @ai-context Create events from PersonaPlex WebSocket messages
+   */
+  createEventsFromMessage(callId: CallId, message: PersonaPlexMessage): NormalizedEvent[] {
     const events: NormalizedEvent[] = [];
     const timestamp = Date.now();
 
-    // Handle different PersonaPlex message types
-    if (message.type === "transcript") {
-      events.push({
-        type: "call.speech",
-        id: `${callId}-speech-${timestamp}`,
-        callId,
-        timestamp,
-        transcript: message.text,
-        isFinal: message.is_final ?? true,
-        confidence: message.confidence,
-      });
-    } else if (message.type === "response") {
-      events.push({
-        type: "call.speaking",
-        id: `${callId}-speaking-${timestamp}`,
-        callId,
-        timestamp,
-        text: message.text,
-      });
+    switch (message.type) {
+      case "transcript":
+        events.push({
+          type: "call.speech",
+          id: `${callId}-speech-${timestamp}`,
+          callId,
+          timestamp,
+          transcript: message.text ?? "",
+          isFinal: message.is_final ?? true,
+          confidence: message.confidence,
+        });
+        break;
+
+      case "text":
+        events.push({
+          type: "call.speaking",
+          id: `${callId}-speaking-${timestamp}`,
+          callId,
+          timestamp,
+          text: message.text ?? "",
+        });
+        break;
+
+      case "error":
+        events.push({
+          type: "call.error",
+          id: `${callId}-error-${timestamp}`,
+          callId,
+          timestamp,
+          error: String(message.data),
+          retryable: true,
+        });
+        break;
     }
 
     return events;
+  }
+
+  /**
+   * @ai-context Get call duration in milliseconds
+   */
+  getCallDuration(callId: CallId): number {
+    const callState = activeConnections.get(callId);
+    if (!callState) return 0;
+    return Date.now() - callState.callStartTime;
   }
 }
 
