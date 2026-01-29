@@ -311,7 +311,7 @@ export const plugin: MoltbotPluginDefinition = {
     const { config, logger: pluginLogger } = api;
 
     // Initialize convergence core with config
-    const coreConfig: ConvergenceCoreConfig = {
+    const _coreConfig: ConvergenceCoreConfig = {
       autonomous: (config.convergence as any)?.autonomous ?? true,
       unrestricted: (config.convergence as any)?.unrestricted ?? false,
       autoDiscover: (config.convergence as any)?.autoDiscover ?? true,

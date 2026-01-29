@@ -218,7 +218,7 @@ export class NotificationManager extends EventEmitter {
       data?: Record<string, unknown>;
     } = {}
   ): Promise<NotificationMessage> {
-    const message: NotificationMessage = {
+    const _message: NotificationMessage = {
       id: this.generateId(),
       title,
       body,
@@ -336,7 +336,7 @@ export class NotificationManager extends EventEmitter {
   // ============================================================================
 
   private async deliverToChannel(
-    message: NotificationMessage,
+    _message: NotificationMessage,
     channel: NotificationChannel
   ): Promise<boolean> {
     try {
@@ -361,7 +361,7 @@ export class NotificationManager extends EventEmitter {
     }
   }
 
-  private async sendTelegram(message: NotificationMessage): Promise<boolean> {
+  private async sendTelegram(_message: NotificationMessage): Promise<boolean> {
     const config = this.config.channels.telegram;
     if (!config?.botToken || !config?.chatId) {
       // Try environment variables
@@ -378,7 +378,7 @@ export class NotificationManager extends EventEmitter {
   private async sendTelegramRequest(
     botToken: string,
     chatId: string,
-    message: NotificationMessage
+    _message: NotificationMessage
   ): Promise<boolean> {
     const emoji = this.getPriorityEmoji(message.priority);
     const text = `${emoji} *${this.escapeMarkdown(message.title)}*\n\n${this.escapeMarkdown(message.body)}`;
@@ -396,7 +396,7 @@ export class NotificationManager extends EventEmitter {
     return response.ok;
   }
 
-  private async sendDiscord(message: NotificationMessage): Promise<boolean> {
+  private async sendDiscord(_message: NotificationMessage): Promise<boolean> {
     const config = this.config.channels.discord;
     const webhookUrl = config?.webhookUrl || process.env.DISCORD_WEBHOOK_URL;
     if (!webhookUrl) return false;
@@ -421,7 +421,7 @@ export class NotificationManager extends EventEmitter {
     return response.ok;
   }
 
-  private async sendSlack(message: NotificationMessage): Promise<boolean> {
+  private async sendSlack(_message: NotificationMessage): Promise<boolean> {
     const config = this.config.channels.slack;
     const webhookUrl = config?.webhookUrl || process.env.SLACK_WEBHOOK_URL;
     if (!webhookUrl) return false;
@@ -454,7 +454,7 @@ export class NotificationManager extends EventEmitter {
     return response.ok;
   }
 
-  private async sendWebhook(message: NotificationMessage): Promise<boolean> {
+  private async sendWebhook(_message: NotificationMessage): Promise<boolean> {
     const config = this.config.channels.webhook;
     const url = config?.url || process.env.NOTIFICATION_WEBHOOK_URL;
     if (!url) return false;
@@ -478,7 +478,7 @@ export class NotificationManager extends EventEmitter {
     return response.ok;
   }
 
-  private sendConsole(message: NotificationMessage): boolean {
+  private sendConsole(_message: NotificationMessage): boolean {
     const emoji = this.getPriorityEmoji(message.priority);
     const colors: Record<NotificationPriority, string> = {
       low: "\x1b[37m",
@@ -514,7 +514,7 @@ export class NotificationManager extends EventEmitter {
     });
   }
 
-  private isDuplicate(message: NotificationMessage): boolean {
+  private isDuplicate(_message: NotificationMessage): boolean {
     const hash = this.hashMessage(message);
     if (this.recentHashes.has(hash)) {
       return true;
@@ -528,11 +528,11 @@ export class NotificationManager extends EventEmitter {
     return false;
   }
 
-  private hashMessage(message: NotificationMessage): string {
+  private hashMessage(_message: NotificationMessage): string {
     return `${message.title}:${message.body}:${message.priority}`;
   }
 
-  private checkRateLimit(message: NotificationMessage): boolean {
+  private checkRateLimit(_message: NotificationMessage): boolean {
     const key = "global";
     const now = Date.now();
     const windowMs = 60000;

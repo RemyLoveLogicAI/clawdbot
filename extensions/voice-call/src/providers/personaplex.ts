@@ -114,7 +114,7 @@ export type ConnectionState =
  */
 export interface PersonaPlexEvents {
   connected: () => void;
-  disconnected: (reason: string) => void;
+  disconnected: (_reason: string) => void;
   ready: () => void;
   error: (error: Error) => void;
   transcript: (text: string, isFinal: boolean, confidence?: number) => void;
@@ -536,7 +536,7 @@ export class PersonaPlexProvider implements VoiceCallProvider {
       this.emitEvent(callId, event);
     });
 
-    connection.on("disconnected", (reason: string) => {
+    connection.on("disconnected", (_reason: string) => {
       const event: NormalizedEvent = {
         type: "call.ended",
         id: `${callId}-ended-${Date.now()}`,

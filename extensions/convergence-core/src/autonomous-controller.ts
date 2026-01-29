@@ -554,7 +554,7 @@ export class AutonomousController extends EventEmitter {
     return decision;
   }
 
-  private calculateConfidence(type: Decision["type"], input: Record<string, unknown>): number {
+  private calculateConfidence(type: Decision["type"], _input: Record<string, unknown>): number {
     // Base confidence by decision type
     const baseConfidence: Record<Decision["type"], number> = {
       route: 0.9,

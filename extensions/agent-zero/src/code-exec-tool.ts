@@ -26,7 +26,7 @@ export interface CodeExecResult {
   executionTime?: number;
 }
 
-export function createCodeExecTool(api: MoltbotPluginApi): ToolDefinition {
+export function createCodeExecTool(_api: MoltbotPluginApi): ToolDefinition {
   return {
     name: "execute_code",
     description: `Execute code in an isolated environment.
@@ -118,8 +118,8 @@ Safety: Code runs in isolation. Network and filesystem access may be limited.`,
 async function executeInDocker(
   code: string,
   language: string,
-  timeout: number,
-  workDir: string
+  _timeout: number,
+  _workDir: string
 ): Promise<CodeExecResult> {
   // In a full implementation, this would:
   // 1. Create or reuse a Docker container
@@ -140,8 +140,8 @@ async function executeInDocker(
 async function executeViaSsh(
   code: string,
   language: string,
-  timeout: number,
-  workDir: string
+  _timeout: number,
+  _workDir: string
 ): Promise<CodeExecResult> {
   // In a full implementation, this would:
   // 1. Connect to SSH host
@@ -162,8 +162,8 @@ async function executeViaSsh(
 async function executeLocally(
   code: string,
   language: string,
-  timeout: number,
-  workDir: string
+  _timeout: number,
+  _workDir: string
 ): Promise<CodeExecResult> {
   // WARNING: Local execution should be heavily sandboxed
   // In a full implementation, this would use:

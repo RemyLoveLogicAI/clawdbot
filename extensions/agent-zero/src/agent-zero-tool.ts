@@ -263,7 +263,7 @@ async function executeAgentStep(
     )
     .join("\n\n");
 
-  const userMessage =
+  const _userMessage =
     iteration === 1
       ? "Begin executing the task."
       : `Previous steps:\n${historyText}\n\nContinue with the next step.`;

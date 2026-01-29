@@ -10,7 +10,7 @@ import type { MoltbotPluginApi, ToolDefinition } from "../../../src/plugins/type
 export interface SpawnSubordinateInput {
   task: string;
   name?: string;
-  context?: string;
+  _context?: string;
   waitForResult?: boolean;
 }
 
@@ -37,7 +37,7 @@ const subordinateAgents = new Map<
   }
 >();
 
-export function createSubordinateTool(api: MoltbotPluginApi): ToolDefinition {
+export function createSubordinateTool(_api: MoltbotPluginApi): ToolDefinition {
   return {
     name: "spawn_subordinate",
     description: `Spawn a subordinate agent to handle a subtask.
@@ -141,7 +141,7 @@ The subordinate will execute independently and return results.`,
 
 async function executeSubordinateTask(
   task: string,
-  context?: string
+  _context?: string
 ): Promise<string> {
   // In a full implementation, this would:
   // 1. Create a new Agent context
@@ -154,7 +154,7 @@ async function executeSubordinateTask(
 
 // Tool to check subordinate status
 export function createCheckSubordinateTool(
-  api: MoltbotPluginApi
+  _api: MoltbotPluginApi
 ): ToolDefinition {
   return {
     name: "check_subordinate",

@@ -51,7 +51,7 @@ export interface RecallMemoryResult {
 // In-memory storage (would be replaced with vector DB in production)
 const memoryStore = new Map<string, MemoryEntry>();
 
-export function createMemoryTool(api: MoltbotPluginApi): ToolDefinition {
+export function createMemoryTool(_api: MoltbotPluginApi): ToolDefinition {
   return {
     name: "agent_memory",
     description: `Store and retrieve persistent memories across conversations.

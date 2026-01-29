@@ -1,3 +1,18 @@
+# Convergence Platform Documentation
+
+> **Unified AI Platform: Voice-First + Autonomous + Research**
+
+## 📚 Documentation Index
+
+| Category | Documents |
+|----------|-----------|
+| **Quick Start** | [Getting Started](./guides/quickstart.md) |
+| **Architecture** | [System Design](./architecture/system-design.md) |
+| **API Reference** | [Auto-Config](./api/auto-config.md) · [Observability](./api/observability.md) · [Autonomous Controller](./api/autonomous-controller.md) |
+| **Extensions** | [Convergence Core](../../extensions/convergence-core/README.md) · [Agent Zero](../../extensions/agent-zero/README.md) · [PersonaPlex](../../extensions/voice-call/src/providers/personaplex.ts) |
+
+---
+
 # Convergence: Open-Poke + PersonaPlex + Agent Zero
 
 This document describes the convergence of three powerful AI projects into Moltbot's unified platform.
