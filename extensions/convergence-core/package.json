@@ -1,0 +1,32 @@
+{
+  "name": "@moltbot/convergence-core",
+  "version": "1.0.0",
+  "description": "Auto-configuration, observability, notifications, and autonomous control for Moltbot convergence",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auto-config": "./src/auto-config.ts",
+    "./observability": "./src/observability.ts",
+    "./notifications": "./src/notifications.ts",
+    "./autonomous-controller": "./src/autonomous-controller.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "oxlint src"
+  },
+  "keywords": [
+    "moltbot",
+    "convergence",
+    "auto-config",
+    "observability",
+    "notifications",
+    "autonomous"
+  ],
+  "author": "Moltbot Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "@moltbot/core": ">=0.1.0"
+  }
+}
