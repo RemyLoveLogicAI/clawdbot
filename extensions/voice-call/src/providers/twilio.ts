@@ -31,8 +31,8 @@ import { verifyTwilioProviderWebhook } from "./twilio/webhook.js";
  * @see https://www.twilio.com/docs/voice/media-streams
  */
 export interface TwilioProviderOptions {
-  /** Allow ngrok free tier compatibility mode (less secure) */
-  allowNgrokFreeTier?: boolean;
+  /** Allow ngrok free tier compatibility mode (loopback only, less secure) */
+  allowNgrokFreeTierLoopbackBypass?: boolean;
   /** Override public URL for signature verification */
   publicUrl?: string;
   /** Path for media stream WebSocket (e.g., /voice/stream) */
@@ -133,6 +133,17 @@ export class TwilioProvider implements VoiceCallProvider {
 
   unregisterCallStream(callSid: string): void {
     this.callStreamMap.delete(callSid);
+  }
+
+  /**
+   * Clear TTS queue for a call (barge-in).
+   * Used when user starts speaking to interrupt current TTS playback.
+   */
+  clearTtsQueue(callSid: string): void {
+    const streamSid = this.callStreamMap.get(callSid);
+    if (streamSid && this.mediaStreamHandler) {
+      this.mediaStreamHandler.clearTtsQueue(streamSid);
+    }
   }
 
   /**
@@ -504,7 +515,7 @@ export class TwilioProvider implements VoiceCallProvider {
   /**
    * Play TTS via core TTS and Twilio Media Streams.
    * Generates audio with core TTS, converts to mu-law, and streams via WebSocket.
-   * Uses a jitter buffer to smooth out timing variations.
+   * Uses a queue to serialize playback and prevent overlapping audio.
    */
   private async playTtsViaStream(
     text: string,
@@ -514,22 +525,29 @@ export class TwilioProvider implements VoiceCallProvider {
       throw new Error("TTS provider and media stream handler required");
     }
 
-    // Generate audio with core TTS (returns mu-law at 8kHz)
-    const muLawAudio = await this.ttsProvider.synthesizeForTelephony(text);
-
     // Stream audio in 20ms chunks (160 bytes at 8kHz mu-law)
     const CHUNK_SIZE = 160;
     const CHUNK_DELAY_MS = 20;
 
-    for (const chunk of chunkAudio(muLawAudio, CHUNK_SIZE)) {
-      this.mediaStreamHandler.sendAudio(streamSid, chunk);
+    const handler = this.mediaStreamHandler;
+    const ttsProvider = this.ttsProvider;
+    await handler.queueTts(streamSid, async (signal) => {
+      // Generate audio with core TTS (returns mu-law at 8kHz)
+      const muLawAudio = await ttsProvider.synthesizeForTelephony(text);
+      for (const chunk of chunkAudio(muLawAudio, CHUNK_SIZE)) {
+        if (signal.aborted) break;
+        handler.sendAudio(streamSid, chunk);
 
-      // Pace the audio to match real-time playback
-      await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
-    }
+        // Pace the audio to match real-time playback
+        await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+        if (signal.aborted) break;
+      }
 
-    // Send a mark to track when audio finishes
-    this.mediaStreamHandler.sendMark(streamSid, `tts-${Date.now()}`);
+      if (!signal.aborted) {
+        // Send a mark to track when audio finishes
+        handler.sendMark(streamSid, `tts-${Date.now()}`);
+      }
+    });
   }
 
   /**

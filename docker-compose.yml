@@ -68,6 +68,23 @@ services:
 
   postgres:
     image: postgres:15-alpine
+      - "${CLAWDBOT_GATEWAY_PORT:-18789}:18789"
+      - "${CLAWDBOT_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${CLAWDBOT_GATEWAY_BIND:-lan}",
+        "--port",
+        "${CLAWDBOT_GATEWAY_PORT:-18789}"
+      ]
+
+  moltbot-cli:
+    image: ${CLAWDBOT_IMAGE:-moltbot:local}
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
