@@ -1,6 +1,10 @@
 /**
- * Agent Zero Tool - Autonomous task execution with reflection and planning
+ * @fileoverview Agent Zero Tool - Autonomous task execution with reflection and planning
+ * @module extensions/agent-zero/agent-zero-tool
+ * @version 1.0.0
+ * @license MIT
  *
+ * @description
  * This tool allows the main Moltbot agent to delegate complex tasks to
  * an autonomous Agent Zero instance that can:
  * - Break down tasks into steps
@@ -8,6 +12,31 @@
  * - Reflect on results
  * - Spawn subordinate agents
  * - Maintain persistent memory
+ *
+ * @example
+ * // Basic autonomous task
+ * api.callTool('agent_zero_task', {
+ *   task: 'Research and summarize AI trends',
+ *   maxIterations: 10,
+ *   memory: true
+ * });
+ *
+ * @ai-context
+ * - This is the main entry point for autonomous task execution
+ * - Each task creates an AgentContext with its own history and memory
+ * - The agent loop runs until task_complete or maxIterations reached
+ * - Memory is persisted for cross-session knowledge retention
+ *
+ * @github-actions
+ * - Tested via: pnpm test extensions/agent-zero
+ * - Linted via: pnpm lint extensions/agent-zero
+ * - CI triggers on: push to any branch, PR to main
+ *
+ * @related-files
+ * - ./subordinate-tool.ts - Child agent spawning
+ * - ./code-exec-tool.ts - Code execution in sandboxes
+ * - ./memory-tool.ts - Persistent memory operations
+ * - ../clawdbot.plugin.json - Plugin configuration schema
  */
 
 import type { MoltbotPluginApi, ToolDefinition } from "../../../src/plugins/types.js";

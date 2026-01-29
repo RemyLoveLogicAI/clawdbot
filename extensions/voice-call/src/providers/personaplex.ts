@@ -1,11 +1,45 @@
 /**
- * PersonaPlex Voice Provider - NVIDIA's Full-Duplex Speech-to-Speech
+ * @fileoverview PersonaPlex Voice Provider - NVIDIA's Full-Duplex Speech-to-Speech
+ * @module extensions/voice-call/providers/personaplex
+ * @version 1.0.0
+ * @license MIT
  *
+ * @description
  * Integrates PersonaPlex for real-time, full-duplex conversational voice
  * with persona control through text-based role prompts and audio-based
- * voice conditioning.
+ * voice conditioning. Based on the Moshi architecture for low-latency
+ * spoken interactions.
  *
- * Based on the Moshi architecture for low-latency spoken interactions.
+ * @example
+ * import { createPersonaPlexProvider, PERSONAPLEX_VOICES } from './personaplex';
+ *
+ * const provider = createPersonaPlexProvider({
+ *   serverUrl: 'wss://localhost:8998',
+ *   voicePrompt: PERSONAPLEX_VOICES.NATF2,
+ *   textPrompt: 'You are a helpful assistant.',
+ * });
+ *
+ * @ai-context
+ * - Full-duplex means simultaneous input/output (no turn-taking)
+ * - Persona is controlled via textPrompt (role) + voicePrompt (voice style)
+ * - Requires PersonaPlex server running separately (python -m moshi.server)
+ * - HF_TOKEN env var needed for model access
+ *
+ * @prerequisites
+ * - PersonaPlex server: pip install moshi/. && python -m moshi.server
+ * - HuggingFace token with model access: export HF_TOKEN=your_token
+ * - Accept model license: https://huggingface.co/nvidia/personaplex-7b-v1
+ *
+ * @github-actions
+ * - Tested via: pnpm test extensions/voice-call
+ * - Integration test requires running PersonaPlex server
+ * - Mock provider used for CI without GPU
+ *
+ * @related-files
+ * - ./base.ts - VoiceCallProvider interface
+ * - ./twilio.ts - Reference implementation
+ * - ../../config.ts - Provider configuration
+ * - /workspace/project/personaplex/ - PersonaPlex source
  */
 
 import type {
