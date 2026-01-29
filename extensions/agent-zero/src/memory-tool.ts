@@ -173,12 +173,22 @@ function storeMemory(
 function recallMemory(input: RecallMemoryInput): RecallMemoryResult {
   const { query, topic, limit = 5, minImportance = 0 } = input;
 
+  // Validate query parameter before using it
+  // Without a query, we cannot perform semantic search, so return empty results
+  if (!query || query.trim() === "") {
+    return {
+      memories: [],
+      totalFound: 0,
+    };
+  }
+
   // Filter and search memories
   const candidates = Array.from(memoryStore.values())
     .filter((m) => m.importance >= minImportance)
     .filter((m) => !topic || m.topic === topic);
 
   // Simple keyword matching (would be vector similarity in production)
+  // Safe to call .toLowerCase() now since query is validated
   const queryWords = query.toLowerCase().split(/\s+/);
   const scored = candidates.map((m) => {
     const contentLower = m.content.toLowerCase();
