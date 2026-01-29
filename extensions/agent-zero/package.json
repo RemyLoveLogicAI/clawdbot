@@ -1,0 +1,17 @@
+{
+  "name": "@moltbot/agent-zero",
+  "version": "2026.1.27-beta.1",
+  "type": "module",
+  "description": "Moltbot Agent Zero integration - autonomous AI agent with tool execution, memory, and subordinate agents",
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "moltbot": "*"
+  },
+  "devDependencies": {
+    "moltbot": "workspace:*"
+  }
+}

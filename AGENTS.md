@@ -154,6 +154,17 @@
 - For manual `moltbot message send` messages that include `!`, use the heredoc pattern noted below to avoid the Bash tool’s escaping.
 - Release guardrails: do not change version numbers without operator’s explicit consent; always ask permission before running any npm publish/release step.
 
+## Convergence Extensions (Open-Poke + PersonaPlex + Agent Zero)
+- **Branch**: `convergence/open-poke-personaplex-agent-zero`
+- **PersonaPlex**: Full-duplex voice at `extensions/voice-call/src/providers/personaplex.ts`
+- **Agent Zero**: Autonomous tasks at `extensions/agent-zero/`
+- **Poke Onboard**: Gmail research skill at `skills/poke-onboard/`
+- **Docs**: Architecture at `docs/convergence/README.md`
+- **CI**: Convergence workflow at `.github/workflows/convergence-ci.yml`
+- **Microagent**: Detailed context at `.openhands/microagents/convergence.md`
+- Environment: `PERSONAPLEX_SERVER_URL`, `HF_TOKEN`, `COMPOSIO_API_KEY`, `AGENT_ZERO_ENABLED`
+- Testing: Use mock modes for CI (`PERSONAPLEX_MOCK_MODE=true`, `AGENT_ZERO_TEST_MODE=mock`)
+
 ## NPM + 1Password (publish/verify)
 - Use the 1password skill; all `op` commands must run inside a fresh tmux session.
 - Sign in: `eval "$(op signin --account my.1password.com)"` (app unlocked + integration on).
