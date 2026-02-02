@@ -1,0 +1,35 @@
+{
+  "name": "@moltbot/notion",
+  "version": "1.0.0",
+  "description": "Complete Notion integration for Moltbot - API, MCP tools, channel, notifications, and export",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./mcp-tools": "./src/mcp-tools.ts",
+    "./channel": "./src/channel.ts",
+    "./notifications": "./src/notifications.ts",
+    "./export": "./src/export.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "oxlint src"
+  },
+  "keywords": [
+    "moltbot",
+    "notion",
+    "api",
+    "mcp",
+    "integration",
+    "channel",
+    "notifications",
+    "export"
+  ],
+  "author": "Moltbot Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "@moltbot/core": ">=0.1.0"
+  }
+}

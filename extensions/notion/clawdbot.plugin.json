@@ -1,0 +1,169 @@
+{
+  "$schema": "../../src/plugins/plugin-schema.json",
+  "id": "notion",
+  "name": "Notion Integration",
+  "description": "Complete Notion integration with API client, MCP tools, channel adapter, notifications, and documentation export",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "config": {
+    "type": "object",
+    "properties": {
+      "apiToken": {
+        "type": "string",
+        "description": "Notion API token (or set NOTION_API_TOKEN env var)",
+        "sensitive": true
+      },
+      "taskDatabaseId": {
+        "type": "string",
+        "description": "Database ID for task queue channel"
+      },
+      "inboxPageId": {
+        "type": "string",
+        "description": "Page ID for inbox comments channel"
+      },
+      "pollIntervalMs": {
+        "type": "number",
+        "default": 30000,
+        "description": "Channel poll interval in milliseconds"
+      },
+      "statusProperty": {
+        "type": "string",
+        "default": "Status",
+        "description": "Property name for task status"
+      },
+      "newTaskStatus": {
+        "type": "string",
+        "default": "New",
+        "description": "Status value for new tasks"
+      },
+      "completedTaskStatus": {
+        "type": "string",
+        "default": "Done",
+        "description": "Status value for completed tasks"
+      },
+      "logDatabaseId": {
+        "type": "string",
+        "description": "Database ID for notification log"
+      },
+      "logPageId": {
+        "type": "string",
+        "description": "Page ID for notification log"
+      },
+      "createNotificationPages": {
+        "type": "boolean",
+        "default": false,
+        "description": "Create separate pages for each notification"
+      },
+      "notificationParentPageId": {
+        "type": "string",
+        "description": "Parent page ID for notification pages"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "default": 30000,
+        "description": "API request timeout"
+      },
+      "maxRetries": {
+        "type": "number",
+        "default": 3,
+        "description": "Max API retry attempts"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "notion_get_page",
+      "description": "Get a Notion page by ID"
+    },
+    {
+      "name": "notion_create_page",
+      "description": "Create a new Notion page"
+    },
+    {
+      "name": "notion_update_page",
+      "description": "Update a Notion page"
+    },
+    {
+      "name": "notion_get_page_content",
+      "description": "Get page content as markdown"
+    },
+    {
+      "name": "notion_append_to_page",
+      "description": "Append content to a page"
+    },
+    {
+      "name": "notion_get_database",
+      "description": "Get database schema"
+    },
+    {
+      "name": "notion_query_database",
+      "description": "Query a database with filters"
+    },
+    {
+      "name": "notion_create_database",
+      "description": "Create a new database"
+    },
+    {
+      "name": "notion_add_database_item",
+      "description": "Add item to database"
+    },
+    {
+      "name": "notion_search",
+      "description": "Search pages and databases"
+    },
+    {
+      "name": "notion_get_block",
+      "description": "Get a block by ID"
+    },
+    {
+      "name": "notion_delete_block",
+      "description": "Delete a block"
+    },
+    {
+      "name": "notion_get_block_children",
+      "description": "Get child blocks"
+    },
+    {
+      "name": "notion_add_comment",
+      "description": "Add comment to page"
+    },
+    {
+      "name": "notion_get_comments",
+      "description": "Get page comments"
+    },
+    {
+      "name": "notion_export_docs",
+      "description": "Export docs to Notion"
+    },
+    {
+      "name": "notion_send_notification",
+      "description": "Send notification to Notion"
+    },
+    {
+      "name": "notion_channel_status",
+      "description": "Get channel status"
+    }
+  ],
+  "httpRoutes": [
+    {
+      "path": "/notion/status",
+      "description": "Integration status endpoint"
+    },
+    {
+      "path": "/notion/webhook",
+      "description": "Webhook endpoint for Notion events"
+    }
+  ],
+  "gatewayMethods": [
+    "notion.search",
+    "notion.getPage",
+    "notion.createPage",
+    "notion.notify"
+  ],
+  "cliCommands": [
+    "notion status",
+    "notion search",
+    "notion export",
+    "notion notify"
+  ]
+}
