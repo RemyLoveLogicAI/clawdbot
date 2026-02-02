@@ -1,0 +1,100 @@
+{
+  "$schema": "../../src/plugins/plugin-schema.json",
+  "id": "convergence-core",
+  "name": "Convergence Core",
+  "description": "Auto-configuration, observability, notifications, and autonomous control for the convergence platform",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "config": {
+    "type": "object",
+    "properties": {
+      "autonomous": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable autonomous mode - system makes decisions without confirmation"
+      },
+      "unrestricted": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable unrestricted mode - disables all guardrails and content filtering"
+      },
+      "autoDiscover": {
+        "type": "boolean",
+        "default": true,
+        "description": "Auto-discover services on local network"
+      },
+      "autoNotify": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically send notifications for system events"
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable debug logging"
+      },
+      "notifyChannels": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["telegram", "discord", "slack", "webhook", "console"]
+        },
+        "default": ["console"],
+        "description": "Default notification channels"
+      },
+      "healthCheckIntervalMs": {
+        "type": "number",
+        "default": 30000,
+        "description": "Health check interval in milliseconds"
+      },
+      "maxConcurrentTasks": {
+        "type": "number",
+        "default": 10,
+        "description": "Maximum concurrent tasks in autonomous controller"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "convergence_status",
+      "description": "Get convergence core status including services, health, and autonomous controller state"
+    },
+    {
+      "name": "convergence_notify",
+      "description": "Send a notification through configured channels"
+    },
+    {
+      "name": "convergence_submit_task",
+      "description": "Submit a task to the autonomous controller for processing"
+    },
+    {
+      "name": "convergence_enable_unrestricted",
+      "description": "Enable unrestricted autonomous mode - disables all guardrails"
+    }
+  ],
+  "httpRoutes": [
+    {
+      "path": "/convergence/metrics",
+      "description": "Prometheus-compatible metrics endpoint"
+    },
+    {
+      "path": "/convergence/status",
+      "description": "JSON status endpoint"
+    },
+    {
+      "path": "/convergence/dashboard",
+      "description": "Dashboard data endpoint"
+    }
+  ],
+  "gatewayMethods": [
+    "convergence.status",
+    "convergence.notify",
+    "convergence.submitTask"
+  ],
+  "cliCommands": [
+    "convergence status",
+    "convergence services",
+    "convergence unrestricted",
+    "convergence notify"
+  ]
+}

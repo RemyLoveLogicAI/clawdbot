@@ -1,0 +1,83 @@
+{
+  "id": "agent-zero",
+  "name": "Agent Zero",
+  "description": "Autonomous AI agent framework with tool execution, persistent memory, code execution, and hierarchical subordinate agents.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable Agent Zero capabilities"
+      },
+      "chatModel": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "default": "anthropic" },
+          "name": { "type": "string", "default": "claude-sonnet-4-20250514" },
+          "ctxLength": { "type": "number", "default": 128000 }
+        }
+      },
+      "utilityModel": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "default": "openai" },
+          "name": { "type": "string", "default": "gpt-4o-mini" }
+        }
+      },
+      "embeddingsModel": {
+        "type": "object",
+        "properties": {
+          "provider": { "type": "string", "default": "openai" },
+          "name": { "type": "string", "default": "text-embedding-3-small" }
+        }
+      },
+      "codeExecution": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": false },
+          "dockerEnabled": { "type": "boolean", "default": false },
+          "dockerImage": { "type": "string", "default": "frdel/agent-zero-run:development" },
+          "sshEnabled": { "type": "boolean", "default": false },
+          "sshHost": { "type": "string", "default": "localhost" },
+          "sshPort": { "type": "number", "default": 55022 },
+          "sshUser": { "type": "string", "default": "root" }
+        }
+      },
+      "memory": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "subdir": { "type": "string", "default": "" }
+        }
+      },
+      "knowledge": {
+        "type": "object",
+        "properties": {
+          "subdirs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "default": ["default", "custom"]
+          }
+        }
+      },
+      "prompts": {
+        "type": "object",
+        "properties": {
+          "subdir": { "type": "string", "default": "default" }
+        }
+      },
+      "maxSubordinateDepth": {
+        "type": "number",
+        "default": 3,
+        "description": "Maximum depth of subordinate agent spawning"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "default": 300000,
+        "description": "Maximum execution time per task (5 minutes default)"
+      }
+    }
+  }
+}
